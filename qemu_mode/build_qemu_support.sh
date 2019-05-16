@@ -22,6 +22,10 @@
 # will be written to ../afl-qemu-trace.
 #
 
+if [ $# -lt 1 ]; then
+    echo "usage: $0 <arch>" >&2
+    exit 1
+fi
 
 VERSION="2.10.0"
 QEMU_URL="http://download.qemu-project.org/qemu-${VERSION}.tar.xz"
@@ -118,6 +122,8 @@ tar xf "$ARCHIVE" || exit 1
 echo "[+] Unpacking successful."
 
 echo "[*] Configuring QEMU for $CPU_TARGET..."
+
+CPU_TARGET="$1"
 
 ORIG_CPU_TARGET="$CPU_TARGET"
 
