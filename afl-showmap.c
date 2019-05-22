@@ -53,6 +53,8 @@ static u8* trace_bits;                /* SHM with instrumentation bitmap   */
 static u8 *out_file,                  /* Trace output file                 */
           *doc_path,                  /* Path to docs                      */
           *target_path,               /* Path to target binary             */
+          qemu_ld_prefix = 0;         /* set the elf interpreter prefix?   */
+          *qemu_ld_prefix_path,       /* The elf interpreter prefix path   */
           *at_file;                   /* Substitution string for @@        */
 
 static u32 exec_tmout;                /* Exec timeout (ms)                 */
@@ -556,17 +558,24 @@ static void find_binary(u8* fname) {
 
 static char** get_qemu_argv(u8* own_loc, char** argv, int argc) {
 
-  char** new_argv = ck_alloc(sizeof(char*) * (argc + 4));
+  char** new_argv = ck_alloc(sizeof(char*) * (argc + 6));
   u8 *tmp, *cp, *rsl, *own_copy;
 
   /* Workaround for a QEMU stability glitch. */
 
   setenv("QEMU_LOG", "nochain", 1);
 
-  memcpy(new_argv + 3, argv + 1, sizeof(char*) * argc);
+  memcpy(new_argv + 5, argv + 1, sizeof(char*) * argc);
 
-  new_argv[2] = target_path;
-  new_argv[1] = "--";
+  if (qemu_ld_prefix) {
+    new_argv[4] = target_path;
+    new_argv[3] = "--";
+    new_argv[2] = qemu_ld_prefix_path;
+    new_argv[1] = "-L";
+  } else {
+    new_argv[2] = target_path;
+    new_argv[1] = "--";
+  }
 
   /* Now we need to actually find qemu for argv[0]. */
 
@@ -626,7 +635,7 @@ int main(int argc, char** argv) {
 
   doc_path = access(DOC_PATH, F_OK) ? "docs" : DOC_PATH;
 
-  while ((opt = getopt(argc,argv,"+o:m:t:A:eqZQbc")) > 0)
+  while ((opt = getopt(argc,argv,"+o:m:t:A:eqZQbcL:")) > 0)
 
     switch (opt) {
 
@@ -721,6 +730,14 @@ int main(int argc, char** argv) {
         if (!mem_limit_given) mem_limit = MEM_LIMIT_QEMU;
 
         qemu_mode = 1;
+        break;
+
+      case 'L': /* QEMU_LD_PREFIX */
+        // set the elf interpreter prefix to 'path'
+        printf("hello world!\n%s\n", optarg);
+        if (!qemu_mode) FATAL("QEMU Mode not enabled");
+        qemu_ld_prefix_path = optarg;
+        qemu_ld_prefix = 1;
         break;
 
       case 'b':

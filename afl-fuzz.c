@@ -89,6 +89,7 @@ EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *in_bitmap,                 /* Input bitmap                     */
           *doc_path,                  /* Path to documentation dir        */
           *target_path,               /* Path to target binary            */
+          *qemu_ld_prefix_path,       /* The elf interpreter prefix path  */
           *orig_cmdline;              /* Original command line            */
 
 EXP_ST u32 exec_tmout = EXEC_TIMEOUT; /* Configurable exec timeout (ms)   */
@@ -118,6 +119,7 @@ EXP_ST u8  skip_deterministic,        /* Skip deterministic stages?       */
            shuffle_queue,             /* Shuffle input queue?             */
            bitmap_changed = 1,        /* Time to update bitmap?           */
            qemu_mode,                 /* Running in QEMU mode?            */
+           qemu_ld_prefix = 0,        /* set the elf interpreter prefix?  */
            skip_requested,            /* Skip request, via SIGUSR1        */
            run_over10m,               /* Run time over 10 minutes?        */
            persistent_mode,           /* Running in persistent mode?      */
@@ -7602,17 +7604,24 @@ EXP_ST void setup_signal_handlers(void) {
 
 static char** get_qemu_argv(u8* own_loc, char** argv, int argc) {
 
-  char** new_argv = ck_alloc(sizeof(char*) * (argc + 4));
+  char** new_argv = ck_alloc(sizeof(char*) * (argc + 6));
   u8 *tmp, *cp, *rsl, *own_copy;
 
   /* Workaround for a QEMU stability glitch. */
 
   setenv("QEMU_LOG", "nochain", 1);
 
-  memcpy(new_argv + 3, argv + 1, sizeof(char*) * argc);
+  memcpy(new_argv + 5, argv + 1, sizeof(char*) * argc);
 
-  new_argv[2] = target_path;
-  new_argv[1] = "--";
+  if (qemu_ld_prefix) {
+    new_argv[4] = target_path;
+    new_argv[3] = "--";
+    new_argv[2] = qemu_ld_prefix_path;
+    new_argv[1] = "-L";
+  } else {
+    new_argv[2] = target_path;
+    new_argv[1] = "--";
+  }
 
   /* Now we need to actually find the QEMU binary to put in argv[0]. */
 
@@ -7723,7 +7732,7 @@ int main(int argc, char** argv) {
   gettimeofday(&tv, &tz);
   srandom(tv.tv_sec ^ tv.tv_usec ^ getpid());
 
-  while ((opt = getopt(argc, argv, "+i:o:f:m:t:T:dnCB:S:M:x:Q")) > 0)
+  while ((opt = getopt(argc, argv, "+i:o:f:m:t:T:dnCB:S:M:x:QL:")) > 0)
 
     switch (opt) {
 
@@ -7889,6 +7898,14 @@ int main(int argc, char** argv) {
 
         if (!mem_limit_given) mem_limit = MEM_LIMIT_QEMU;
 
+        break;
+
+      case 'L': /* QEMU_LD_PREFIX */
+        // set the elf interpreter prefix to 'path'
+        printf("hello world!\n%s\n", optarg);
+        if (!qemu_mode) FATAL("QEMU Mode not enabled");
+        qemu_ld_prefix_path = optarg;
+        qemu_ld_prefix = 1;
         break;
 
       default:
